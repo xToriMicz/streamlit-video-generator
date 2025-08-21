@@ -640,11 +640,22 @@ class LicenseManager:
 if 'license_manager' not in st.session_state:
     st.session_state.license_manager = LicenseManager()
 
-# License verification ()
+# License verification with persistent storage ()
+# Try to load license from query params (persistent across page refreshes)
+query_params = st.query_params
+stored_license = query_params.get("license_key", "")
+
 if 'license_verified' not in st.session_state:
     st.session_state.license_verified = False
 if 'license_key' not in st.session_state:
-    st.session_state.license_key = ""
+    st.session_state.license_key = stored_license
+
+# Auto-verify stored license if exists
+if stored_license and not st.session_state.license_verified:
+    is_valid, message = st.session_state.license_manager.verify_license_key(stored_license)
+    if is_valid:
+        st.session_state.license_verified = True
+        st.session_state.license_key = stored_license
 
 # Helper Functions ()
 def get_ffmpeg_path():
@@ -1526,6 +1537,8 @@ def show_license_page():
             if is_valid:
                 st.session_state.license_verified = True
                 st.session_state.license_key = license_input
+                # Store license in URL query params for persistence
+                st.query_params["license_key"] = license_input
                 st.success(f"🎉 {message}")
                 time.sleep(1)
                 st.rerun()
@@ -1585,10 +1598,17 @@ def main():
     st.markdown('<div class="main-title">🎬 CREATE SHORT 60S</div>', unsafe_allow_html=True)
     st.markdown('<div class="subtitle">สร้างวิดีโอสมจริงแบบอัตโนมัติ (Streamlit Web Version)</div><hr />', unsafe_allow_html=True)
     
-    # License info in corner
+    # License info in corner with logout
     col_left, col_right = st.columns([3, 1])
     with col_right:
-        st.markdown(f'<div style="text-align: right; font-size: 12px; color: #666; margin-bottom: 10px;">🔐 Licensed</div>', unsafe_allow_html=True)
+        st.markdown(f'<div style="text-align: right; font-size: 12px; color: #666; margin-bottom: 5px;">🔐 Licensed</div>', unsafe_allow_html=True)
+        if st.button("🔓 ออกจากระบบ", key="logout_btn", help="ล้าง License Key"):
+            st.session_state.license_verified = False
+            st.session_state.license_key = ""
+            # Clear license from URL query params
+            if "license_key" in st.query_params:
+                del st.query_params["license_key"]
+            st.rerun()
     
     # Settings Dialog (Hidden if Environment Variables exist)
     env_has_keys = any([os.getenv('OPENAI_KEY'), os.getenv('GOOGLE_TTS_KEY'), os.getenv('FAL_AI_KEY')])
