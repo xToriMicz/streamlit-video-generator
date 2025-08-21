@@ -1391,8 +1391,14 @@ def create_video_with_ffmpeg(image_files, audio_file, title):
         
         # รวมเสียงกับวิดีโอ
         safe_title = sanitize_filename(title)
-        final_video = tempfile.NamedTemporaryFile(delete=False, suffix='.mp4')
-        final_video.close()
+        
+        # สร้างโฟลเดอร์ output ถ้ายังไม่มี
+        output_dir = Path("output_videos")
+        output_dir.mkdir(exist_ok=True)
+        
+        # สร้างไฟล์วิดีโอในโฟลเดอร์ output_videos
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        final_video_path = output_dir / f"{safe_title}_{timestamp}.mp4"
         
         cmd2 = [
             ffmpeg_path, "-i", temp_video.name, "-i", audio_file,
@@ -1400,7 +1406,7 @@ def create_video_with_ffmpeg(image_files, audio_file, title):
             "-movflags", "+faststart",  # เพิ่มเพื่อให้เล่นใน web ได้ดีขึ้น
             "-pix_fmt", "yuv420p",      # เพิ่มความเข้ากันได้
             "-shortest",
-            final_video.name, "-y"
+            str(final_video_path), "-y"
         ]
         
         result2 = subprocess.run(cmd2, capture_output=True, text=True)
@@ -1415,7 +1421,7 @@ def create_video_with_ffmpeg(image_files, audio_file, title):
         except:
             pass
         
-        return final_video.name
+        return str(final_video_path)
         
     except Exception as e:
         log_error(e, "FFmpeg Video Creation")
@@ -1813,32 +1819,25 @@ def main():
         if os.path.exists(video_path):
             st.success("✅ วิดีโอพร้อมใช้งาน!")
             
-            # แสดงวิดีโอแบบหลายรูปแบบเพื่อแก้ปัญหาการเล่น
+            # แสดงวิดีโอในเบราว์เซอร์
             try:
-                # วิธีที่ 1: ใช้ st.video ปกติ
-                st.video(video_path)
-            except Exception as e:
-                st.warning("⚠️ ไม่สามารถเล่นวิดีโอในเบราว์เซอร์ได้")
+                # ตรวจสอบขนาดไฟล์ก่อน
+                file_size_mb = os.path.getsize(video_path) / (1024 * 1024)
                 
-                # วิธีที่ 2: แสดงเป็น HTML video tag
-                try:
-                    with open(video_path, 'rb') as video_file:
-                        video_bytes = video_file.read()
+                if file_size_mb < 50:  # น้อยกว่า 50MB
+                    # แสดงวิดีโอโดยตรง
+                    st.video(video_path)
+                else:
+                    # ไฟล์ใหญ่เกินไป แนะนำให้ดาวน์โหลด
+                    st.warning(f"⚠️ ไฟล์วิดีโอมีขนาดใหญ่ ({file_size_mb:.1f} MB) อาจเล่นได้ช้าในเบราว์เซอร์")
+                    st.info("💡 แนะนำให้ดาวน์โหลดไฟล์เพื่อดูวิดีโอได้ดียิ่งขึ้น")
                     
-                    # เปลี่ยนเป็น base64 สำหรับแสดงใน HTML
-                    import base64
-                    video_base64 = base64.b64encode(video_bytes).decode()
+                    # ยังคงพยายามแสดง
+                    st.video(video_path)
                     
-                    video_html = f"""
-                    <video width="100%" controls>
-                        <source src="data:video/mp4;base64,{video_base64}" type="video/mp4">
-                        เบราว์เซอร์ของคุณไม่รองรับการเล่นวิดีโอ
-                    </video>
-                    """
-                    st.markdown(video_html, unsafe_allow_html=True)
-                except Exception as e2:
-                    st.error(f"❌ ไม่สามารถแสดงวิดีโอได้: {str(e2)}")
-                    st.info("💡 กรุณาดาวน์โหลดไฟล์เพื่อดูวิดีโอ")
+            except Exception as e:
+                st.error(f"❌ ไม่สามารถเล่นวิดีโอในเบราว์เซอร์ได้: {str(e)}")
+                st.info("💡 กรุณาใช้ปุ่มดาวน์โหลดด้านล่างเพื่อดูวิดีโอ")
             
             # Video info
             st.markdown(f"**🏷️ ชื่อ:** {st.session_state.get('video_title', 'ไม่มีชื่อ')}")
@@ -1848,21 +1847,29 @@ def main():
             try:
                 file_size = os.path.getsize(video_path) / (1024 * 1024)  # MB
                 st.markdown(f"**📊 ขนาดไฟล์:** {file_size:.1f} MB")
+                st.markdown(f"**📁 ที่อยู่ไฟล์:** `{video_path}`")
             except:
                 pass
             
             # Download button
-            with open(video_path, 'rb') as file:
-                video_data = file.read()
-                safe_filename = sanitize_filename(st.session_state.get('video_title', 'video')) + '.mp4'
+            try:
+                with open(video_path, 'rb') as video_file:
+                    video_bytes = video_file.read()
+                    
+                # สร้างชื่อไฟล์สำหรับ download
+                video_filename = Path(video_path).name
                 
                 st.download_button(
-                    label="💾 ดาวน์โหลดวิดีโอ",
-                    data=video_data,
-                    file_name=safe_filename,
+                    label="📥 ดาวน์โหลดวิดีโอ",
+                    data=video_bytes,
+                    file_name=video_filename,
                     mime="video/mp4",
-                    use_container_width=True
+                    use_container_width=True,
+                    help="คลิกเพื่อดาวน์โหลดวิดีโอไปเก็บในเครื่อง"
                 )
+            except Exception as e:
+                st.error(f"❌ ไม่สามารถสร้างปุ่มดาวน์โหลดได้: {str(e)}")
+                st.info(f"💡 คุณสามารถหาไฟล์วิดีโอได้ที่: `{video_path}`")
             
             # Script display
             if st.session_state.get('video_script'):
