@@ -1432,6 +1432,8 @@ if 'show_settings' not in st.session_state:
     st.session_state['show_settings'] = False
 if 'current_topic' not in st.session_state:
     st.session_state['current_topic'] = ""
+if 'video_just_completed' not in st.session_state:
+    st.session_state['video_just_completed'] = False
 
 # Settings Dialog Function ()
 def show_settings_dialog():
@@ -1778,6 +1780,7 @@ def main():
                     st.session_state['video_description'] = title_desc.get('description', '')
                     st.session_state['video_script'] = story_script
                     st.session_state['generation_in_progress'] = False
+                    st.session_state['video_just_completed'] = True  # Flag to prevent auto-refresh
                     
                     # Clean up temp files
                     try:
@@ -1791,8 +1794,7 @@ def main():
                     except:
                         pass
                     
-                    # ไม่ต้อง rerun เพื่อป้องกันลูปไม่สิ้นสุด
-                    time.sleep(1)
+                    # ไม่ต้อง rerun หรือ time.sleep เพื่อป้องกันการรีโหลดที่ไม่จำเป็น
                     
                 except Exception as e:
                     progress_bar.progress(0)
@@ -1888,6 +1890,7 @@ def main():
                     st.session_state['video_generated'] = False
                     st.session_state['video_path'] = None
                     st.session_state['current_topic'] = ""
+                    st.session_state['video_just_completed'] = False
             
             with col2:
                 if st.button("🗑️ ลบวิดีโอ", use_container_width=True):
@@ -1900,6 +1903,7 @@ def main():
                     
                     st.session_state['video_generated'] = False
                     st.session_state['video_path'] = None
+                    st.session_state['video_just_completed'] = False
                     st.success("🗑️ ลบวิดีโอแล้ว")
         else:
             st.error(f"❌ ไม่พบไฟล์วิดีโอ: {video_path}")
