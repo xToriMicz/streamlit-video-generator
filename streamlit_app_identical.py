@@ -26,6 +26,7 @@ import pickle
 import psutil
 import getpass
 from cryptography.fernet import Fernet
+import imageio_ffmpeg as ffmpeg
 
 import streamlit as st
 
@@ -572,6 +573,22 @@ if 'api_keys_initialized' not in st.session_state:
     })
 
 # Helper Functions ()
+def get_ffmpeg_path():
+    """หา path ของ ffmpeg สำหรับทั้ง local และ cloud"""
+    try:
+        # ลองหา ffmpeg.exe ในโฟลเดอร์ปัจจุบัน (local)
+        if os.path.exists('./ffmpeg.exe'):
+            return './ffmpeg.exe'
+        
+        # ใช้ imageio-ffmpeg สำหรับ cloud deployment
+        return ffmpeg.get_ffmpeg_exe()
+    except Exception as e:
+        try:
+            log_error(e, "Get FFmpeg Path")
+        except:
+            pass
+        return 'ffmpeg'  # fallback ใช้ system ffmpeg
+
 def log_error(error, context="", response_text=""):
     """บันทึก error อย่างปลอดภัยพร้อมรายละเอียด"""
     import traceback
@@ -963,8 +980,9 @@ def create_silent_audio():
         silent_audio.close()
         
         # ใช้ FFmpeg สร้างไฟล์เสียงว่าง
+        ffmpeg_path = get_ffmpeg_path()
         cmd = [
-            './ffmpeg.exe', '-f', 'lavfi', '-i', 'anullsrc=channel_layout=mono:sample_rate=44100', 
+            ffmpeg_path, '-f', 'lavfi', '-i', 'anullsrc=channel_layout=mono:sample_rate=44100', 
             '-t', '60', str(silent_audio.name), '-y'
         ]
         
@@ -1251,8 +1269,9 @@ def create_placeholder_image(text):
 def create_video_with_ffmpeg(image_files, audio_file, title):
     """สร้างวิดีโอด้วย FFmpeg ()"""
     try:
-        if not os.path.exists('ffmpeg.exe'):
-            raise APIError("ไม่พบไฟล์ ffmpeg.exe ในโฟลเดอร์")
+        ffmpeg_path = get_ffmpeg_path()
+        if not ffmpeg_path:
+            raise APIError("ไม่พบ FFmpeg ในระบบ")
         
         if not image_files:
             raise APIError("ไม่มีรูปภาพสำหรับสร้างวิดีโอ")
@@ -1274,7 +1293,7 @@ def create_video_with_ffmpeg(image_files, audio_file, title):
         
         # สร้างวิดีโอจากรูปภาพ
         cmd1 = [
-            './ffmpeg.exe', "-f", "concat", "-safe", "0", "-i", image_list_file,
+            ffmpeg_path, "-f", "concat", "-safe", "0", "-i", image_list_file,
             "-vf", "scale=8000:-1,zoompan=z='zoom+0.001':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=150:s=1080x1920:fps=30",
             "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "25",
             temp_video.name, "-y"
@@ -1291,7 +1310,7 @@ def create_video_with_ffmpeg(image_files, audio_file, title):
         final_video.close()
         
         cmd2 = [
-            './ffmpeg.exe', "-i", temp_video.name, "-i", audio_file,
+            ffmpeg_path, "-i", temp_video.name, "-i", audio_file,
             "-c:v", "libx264", "-c:a", "aac", 
             "-movflags", "+faststart",  # เพิ่มเพื่อให้เล่นใน web ได้ดีขึ้น
             "-pix_fmt", "yuv420p",      # เพิ่มความเข้ากันได้
@@ -1720,10 +1739,15 @@ def main():
         
         with col3:
             # FFmpeg Status
-            ffmpeg_exists = os.path.exists('ffmpeg.exe')
-            if ffmpeg_exists:
-                st.success("✅ พบ FFmpeg")
-            else:
+            try:
+                ffmpeg_path = get_ffmpeg_path()
+                ffmpeg_exists = ffmpeg_path is not None
+                if ffmpeg_exists:
+                    st.success("✅ พบ FFmpeg")
+                else:
+                    st.error("❌ ไม่พบ FFmpeg")
+            except:
+                ffmpeg_exists = False
                 st.error("❌ ไม่พบ FFmpeg")
         
         # แถวที่ 2: System Resources (2 คอลัมน์)
