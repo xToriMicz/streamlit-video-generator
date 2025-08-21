@@ -3,3 +3,4 @@ requests
 psutil
 cryptography
 imageio[ffmpeg]
+imageio-ffmpeg
