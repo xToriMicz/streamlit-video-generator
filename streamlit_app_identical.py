@@ -545,15 +545,21 @@ if 'api_manager' not in st.session_state:
 if 'template_manager' not in st.session_state:
     st.session_state.template_manager = TemplateManager()
 
-# Initialize API keys with default values for testing ()
-if 'api_keys_initialized' not in st.session_state:
+# Initialize API keys from Environment Variables every time ()
+# This ensures API keys from Render Environment Variables are always loaded
+env_api_keys = {
+    'OPENAI_KEY': os.getenv('OPENAI_KEY', ''),
+    'GOOGLE_TTS_KEY': os.getenv('GOOGLE_TTS_KEY', ''),
+    'FAL_AI_KEY': os.getenv('FAL_AI_KEY', '')
+}
+
+# Only update if Environment Variables have values
+if any(env_api_keys.values()):
+    st.session_state.api_manager.save_all_api_keys(env_api_keys)
+elif 'api_keys_initialized' not in st.session_state:
     st.session_state.api_keys_initialized = True
-    # Set default API keys for testing
-    st.session_state.api_manager.save_all_api_keys({
-        'OPENAI_KEY': '',
-        'GOOGLE_TTS_KEY': '',  # Add your Google TTS API key
-        'FAL_AI_KEY': ''  # Add your FAL AI API key
-    })
+    # Fallback to empty if no environment variables
+    st.session_state.api_manager.save_all_api_keys(env_api_keys)
 
 # Helper Functions ()
 def get_ffmpeg_path():
