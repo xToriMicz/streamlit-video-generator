@@ -2,3 +2,4 @@ streamlit
 requests
 psutil
 cryptography
+imageio[ffmpeg]
