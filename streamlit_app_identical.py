@@ -1818,29 +1818,41 @@ def main():
                                 import psutil
                                 memory = psutil.virtual_memory()
                                 st.info(f"💾 Memory: {memory.percent:.1f}% | Available: {memory.available/1024/1024:.0f}MB")
-                                if memory.percent > 70:
-                                    st.error(f"❌ Memory เกือบหมด ({memory.percent:.1f}%) - หยุดการทำงานเพื่อป้องกัน crash")
+                                if memory.percent > 60 or memory.available < 200*1024*1024:  # 60% หรือ RAM เหลือ < 200MB
+                                    st.error(f"❌ Memory เกือบหมด ({memory.percent:.1f}%, เหลือ {memory.available/1024/1024:.0f}MB)")
+                                    st.error("🚫 Render Free Tier จำกัด 512MB - หยุดเพื่อป้องกัน crash")
                                     st.session_state['generation_in_progress'] = False
                                     return
                             except Exception as e:
                                 st.warning(f"⚠️ ไม่สามารถตรวจสอบ memory ได้: {str(e)}")
                                 
-                            # ลด resource usage บน cloud
-                            st.info("🔧 กำลังปรับ settings สำหรับ cloud environment...")
-                            # Force cleanup temp files ก่อนเริ่มสร้างรูป
+                            # ลด resource usage บน cloud (Render Free Tier = 512MB)
+                            st.info("🔧 กำลังปรับ settings สำหรับ Render 512MB limit...")
+                            
+                            # 1. Force cleanup temp files
                             try:
                                 import tempfile
                                 import shutil
+                                import gc
                                 temp_dir = tempfile.gettempdir()
+                                cleaned = 0
                                 for f in os.listdir(temp_dir):
                                     if f.startswith('tmp') and (f.endswith('.jpg') or f.endswith('.mp4') or f.endswith('.wav')):
                                         try:
                                             os.remove(os.path.join(temp_dir, f))
+                                            cleaned += 1
                                         except:
                                             pass
-                                st.info("🧹 ล้าง temp files เพื่อประหยัด memory")
-                            except:
-                                pass
+                                # 2. Force garbage collection
+                                gc.collect()
+                                st.info(f"🧹 ล้าง {cleaned} temp files + garbage collection")
+                            except Exception as e:
+                                st.warning(f"⚠️ Cleanup error: {str(e)}")
+                                
+                            # 3. ลดจำนวนรูปภาพสำหรับ cloud
+                            if len(image_prompts) > 8:
+                                image_prompts = image_prompts[:8]  # จำกัด 8 รูปสูงสุด
+                                st.info(f"⚡ ลดรูปภาพเหลือ {len(image_prompts)} ภาพ เพื่อประหยัด memory")
                             
                         image_files = generate_images_with_fal(image_prompts, update_image_progress)
                         
@@ -1857,9 +1869,10 @@ def main():
                                 import psutil
                                 memory = psutil.virtual_memory()
                                 st.info(f"💾 Memory หลังสร้างรูป: {memory.percent:.1f}% | Available: {memory.available/1024/1024:.0f}MB")
-                                if memory.percent > 75:
-                                    st.error(f"❌ Memory เกือบหมด ({memory.percent:.1f}%) - หยุดก่อน FFmpeg เพื่อป้องกัน server crash")
-                                    st.warning("💡 แนะนำ: ลองใส่หัวข้อที่สั้นกว่านี้ หรือรอสักครู่แล้วลองใหม่")
+                                if memory.percent > 65 or memory.available < 150*1024*1024:  # 65% หรือ RAM เหลือ < 150MB
+                                    st.error(f"❌ Memory เกือบหมด ({memory.percent:.1f}%, เหลือ {memory.available/1024/1024:.0f}MB)")
+                                    st.error("🚫 Render limit 512MB - หยุด FFmpeg เพื่อป้องกัน crash")
+                                    st.warning("💡 วิธีแก้: ใส่หัวข้อที่สั้นกว่า หรือรอให้ memory ว่างก่อน")
                                     st.session_state['generation_in_progress'] = False
                                     return
                             except Exception as e:
@@ -1910,7 +1923,14 @@ def main():
                     except:
                         pass
                     
-                    # ไม่ต้อง rerun หรือ time.sleep เพื่อป้องกันการรีโหลดที่ไม่จำเป็น
+                    # Final memory cleanup สำหรับ cloud
+                    if is_cloud:
+                        try:
+                            import gc
+                            gc.collect()
+                            st.info("🧹 Final cleanup สำเร็จ - memory ถูกคืนคืนแล้ว")
+                        except:
+                            pass
                     
                 except Exception as e:
                     progress_bar.progress(0)
