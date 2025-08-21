@@ -27,6 +27,8 @@ import psutil
 import getpass
 from cryptography.fernet import Fernet
 import imageio_ffmpeg as ffmpeg
+import hashlib
+from datetime import datetime, timedelta
 
 import streamlit as st
 
@@ -544,6 +546,14 @@ if 'api_manager' not in st.session_state:
     st.session_state.api_manager = SecureAPIKeyManager()
 if 'template_manager' not in st.session_state:
     st.session_state.template_manager = TemplateManager()
+if 'license_manager' not in st.session_state:
+    st.session_state.license_manager = LicenseManager()
+
+# License verification ()
+if 'license_verified' not in st.session_state:
+    st.session_state.license_verified = False
+if 'license_key' not in st.session_state:
+    st.session_state.license_key = ""
 
 # Initialize API keys from Environment Variables every time ()
 # This ensures API keys from Render Environment Variables are always loaded
@@ -560,6 +570,65 @@ elif 'api_keys_initialized' not in st.session_state:
     st.session_state.api_keys_initialized = True
     # Fallback to empty if no environment variables
     st.session_state.api_manager.save_all_api_keys(env_api_keys)
+
+# License Key System ()
+class LicenseManager:
+    def __init__(self):
+        self.secret = "VG_FFMPEG_SECRET_2025_RENDER"
+        
+    def generate_license_key(self, username, months=12):
+        """สร้าง License Key สำหรับ user"""
+        try:
+            expiry = datetime.now() + timedelta(days=months*30)
+            raw_string = f"{username.lower()}_{self.secret}_{expiry.strftime('%Y%m%d')}"
+            hash_part = hashlib.sha256(raw_string.encode()).hexdigest()[:8].upper()
+            expiry_code = expiry.strftime('%y%m')
+            return f"VG-{hash_part}-{expiry_code}"
+        except Exception as e:
+            return None
+    
+    def verify_license_key(self, license_key, username=None):
+        """ตรวจสอบ License Key ว่าถูกต้องหรือไม่"""
+        try:
+            if not license_key or not license_key.startswith('VG-'):
+                return False, "รูปแบบ License Key ไม่ถูกต้อง"
+                
+            parts = license_key.split('-')
+            if len(parts) != 3:
+                return False, "รูปแบบ License Key ไม่ถูกต้อง"
+                
+            prefix, hash_part, expiry_code = parts
+            
+            # ตรวจสอบรูปแบบ
+            if len(hash_part) != 8 or len(expiry_code) != 4:
+                return False, "รูปแบบ License Key ไม่ถูกต้อง"
+            
+            # ตรวจสอบวันหมดอายุ
+            try:
+                expiry_year = 2000 + int(expiry_code[:2])
+                expiry_month = int(expiry_code[2:])
+                expiry_date = datetime(expiry_year, expiry_month, 28)  # วันที่ 28 ปลอดภัย
+                
+                if datetime.now() > expiry_date:
+                    return False, f"License หมดอายุแล้ว ({expiry_date.strftime('%m/%Y')})"
+            except:
+                return False, "วันหมดอายุไม่ถูกต้อง"
+            
+            # ตรวจสอบ hash (ถ้าไม่ระบุ username ให้ผ่านไปก่อน)
+            if username:
+                expected_raw = f"{username.lower()}_{self.secret}_{expiry_date.strftime('%Y%m%d')}"
+                expected_hash = hashlib.sha256(expected_raw.encode()).hexdigest()[:8].upper()
+                if hash_part != expected_hash:
+                    return False, "License Key ไม่ถูกต้องสำหรับ user นี้"
+            
+            return True, f"License ถูกต้อง (หมดอายุ {expiry_date.strftime('%m/%Y')})"
+            
+        except Exception as e:
+            return False, f"ข้อผิดพลาด: {str(e)}"
+    
+    def get_demo_license(self):
+        """สร้าง Demo License Key ทดลองใช้ 1 เดือน"""
+        return self.generate_license_key("demo_user", 1)
 
 # Helper Functions ()
 def get_ffmpeg_path():
@@ -1419,14 +1488,78 @@ def show_settings_dialog():
     
     st.markdown('</div></div>', unsafe_allow_html=True)
 
+def show_license_page():
+    """แสดงหน้า License Key Authentication"""
+    
+    st.markdown('<div class="main-title">🔐 LICENSE AUTHENTICATION</div>', unsafe_allow_html=True)
+    st.markdown('<div class="subtitle">กรุณาใส่ License Key เพื่อใช้งาน CREATE SHORT 60S</div><hr />', unsafe_allow_html=True)
+    
+    # License Key Input
+    st.markdown('<div class="section-label">🔑 License Key:</div>', unsafe_allow_html=True)
+    license_input = st.text_input(
+        "License Key",
+        value=st.session_state.license_key,
+        placeholder="VG-XXXXXXXX-YYMM",
+        key="license_input_field",
+        label_visibility="collapsed"
+    )
+    
+    col1, col2 = st.columns([1, 1])
+    
+    with col1:
+        if st.button("✅ ตรวจสอบ License", use_container_width=True):
+            if license_input:
+                is_valid, message = st.session_state.license_manager.verify_license_key(license_input)
+                if is_valid:
+                    st.session_state.license_verified = True
+                    st.session_state.license_key = license_input
+                    st.success(f"🎉 {message}")
+                    time.sleep(1)
+                    st.rerun()
+                else:
+                    st.error(f"❌ {message}")
+            else:
+                st.warning("⚠️ กรุณาใส่ License Key")
+    
+    with col2:
+        if st.button("📝 ขอ Demo License", use_container_width=True):
+            demo_license = st.session_state.license_manager.get_demo_license()
+            if demo_license:
+                st.info(f"🎯 **Demo License Key:**\n```\n{demo_license}\n```")
+                st.info("📋 คัดลอก License Key ด้านบนแล้วนำมาใส่ในช่องข้างบน")
+    
+    # Instructions
+    st.markdown("---")
+    st.markdown("### 📋 คำแนะนำ:")
+    st.markdown("""
+    - **Demo License**: สำหรับทดลองใช้ฟรี 1 เดือน
+    - **รูปแบบ License**: `VG-XXXXXXXX-YYMM`
+    - **ติดต่อขอ License**: สำหรับการใช้งานจริง
+    """)
+    
+    # Footer
+    st.markdown("---")
+    st.markdown("*🛡️ ระบบป้องกันการใช้งานโดยไม่ได้รับอนุญาต*")
+
 # Main Application ()
 def main():
+    # License Check - Must be verified before using the app
+    if not st.session_state.license_verified:
+        show_license_page()
+        return
+    
     # Header ()
     st.markdown('<div class="main-title">🎬 CREATE SHORT 60S</div>', unsafe_allow_html=True)
     st.markdown('<div class="subtitle">สร้างวิดีโอสมจริงแบบอัตโนมัติ (Streamlit Web Version)</div><hr />', unsafe_allow_html=True)
     
-    # Settings Dialog
-    if st.session_state.get('show_settings', False):
+    # License info in corner
+    col_left, col_right = st.columns([3, 1])
+    with col_right:
+        st.markdown(f'<div style="text-align: right; font-size: 12px; color: #666; margin-bottom: 10px;">🔐 Licensed</div>', unsafe_allow_html=True)
+    
+    # Settings Dialog (Hidden if Environment Variables exist)
+    env_has_keys = any([os.getenv('OPENAI_KEY'), os.getenv('GOOGLE_TTS_KEY'), os.getenv('FAL_AI_KEY')])
+    if not env_has_keys and st.session_state.get('show_settings', False):
         show_settings_dialog()
         return
     
@@ -1445,19 +1578,38 @@ def main():
     st.session_state['current_topic'] = topic
     
     # Template selection row
-    col1, col2 = st.columns([1, 2])
-    
-    with col1:
-        if st.button("⚙️ ตั้งค่า", use_container_width=True):
-            st.session_state['show_settings'] = True
-            st.rerun()
-    
-    with col2:
-        template_manager = st.session_state.template_manager
-        template_list = template_manager.get_template_list()
-        template_names = [name for _, name in template_list]
-        template_ids = [id for id, _ in template_list]
+    if not env_has_keys:
+        col1, col2 = st.columns([1, 2])
         
+        with col1:
+            if st.button("⚙️ ตั้งค่า", use_container_width=True):
+                st.session_state['show_settings'] = True
+                st.rerun()
+        
+        with col2:
+            template_manager = st.session_state.template_manager
+    else:
+        # Hide settings button when environment variables exist
+        template_manager = st.session_state.template_manager
+    
+    # Template selection
+    template_list = template_manager.get_template_list()
+    template_names = [name for _, name in template_list]
+    template_ids = [id for id, _ in template_list]
+    
+    # Show template selector in appropriate column or full width
+    if not env_has_keys:
+        # With col2 from settings button row
+        with col2:
+            selected_index = st.selectbox(
+                "เทมเพลต",
+                range(len(template_names)),
+                format_func=lambda x: template_names[x],
+                key="template_select",
+                label_visibility="collapsed"
+            )
+    else:
+        # Full width when no settings button
         selected_index = st.selectbox(
             "เทมเพลต",
             range(len(template_names)),
@@ -1465,7 +1617,8 @@ def main():
             key="template_select",
             label_visibility="collapsed"
         )
-        selected_template = template_ids[selected_index]
+    
+    selected_template = template_ids[selected_index]
     
     st.markdown('</div>', unsafe_allow_html=True)
     
