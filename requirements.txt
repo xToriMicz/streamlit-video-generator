@@ -5,6 +5,3 @@ cryptography>=3.0.0
 imageio[ffmpeg]>=2.25.0
 imageio-ffmpeg>=0.4.8
 pillow>=8.0.0
-numpy>=1.21.0
-hashlib-compat
-pathlib2
