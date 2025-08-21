@@ -29,6 +29,7 @@ from cryptography.fernet import Fernet
 import imageio_ffmpeg as ffmpeg
 import hashlib
 from datetime import datetime, timedelta
+import time
 
 import streamlit as st
 
@@ -1875,7 +1876,7 @@ def main():
             # Google TTS Status
             google_tts_key = st.session_state.api_manager.get_api_key('GOOGLE_TTS_KEY')
             if google_tts_key:
-                st.success("✅ Google TTS: พร้อมใช้งาน")
+                st.success("✅ TTS: พร้อมใช้งาน")
             else:
                 st.info("💡 Google TTS: ไม่บังคับ")
         
