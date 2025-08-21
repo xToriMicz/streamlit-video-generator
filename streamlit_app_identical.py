@@ -818,21 +818,28 @@ def create_story_script(topic, template_category="story"):
             'temperature': 0.7
         }
         
-        response = requests.post('https://api.openai.com/v1/chat/completions', 
-                               headers=headers, json=data, timeout=30)
-        
-        if response.status_code == 200:
-            try:
-                result = response.json()
-                return result['choices'][0]['message']['content'].strip()
-            except json.JSONDecodeError as e:
-                log_error(e, "OpenAI Story Script JSON Parse", response.text)
-                raise APIError(f"Failed to parse OpenAI response: {str(e)}")
-        else:
-            raise APIError(f"OpenAI API Error: {response.status_code} - {response.text}")
+        response = None
+        try:
+            response = requests.post('https://api.openai.com/v1/chat/completions', 
+                                   headers=headers, json=data, timeout=30)
+            
+            if response.status_code == 200:
+                try:
+                    result = response.json()
+                    return result['choices'][0]['message']['content'].strip()
+                except json.JSONDecodeError as e:
+                    log_error(e, "OpenAI Story Script JSON Parse", response.text)
+                    raise APIError(f"Failed to parse OpenAI response: {str(e)}")
+            else:
+                raise APIError(f"OpenAI API Error: {response.status_code} - {response.text}")
+                
+        except requests.RequestException as e:
+            log_error(e, "OpenAI Story Script Request", "")
+            raise APIError(f"การเชื่อมต่อ OpenAI API ล้มเหลว: {str(e)}")
             
     except Exception as e:
-        log_error(e, "OpenAI Story Script", getattr(response, 'text', ''))
+        response_text = getattr(response, 'text', '') if response else ''
+        log_error(e, "OpenAI Story Script", response_text)
         raise e
 
 def create_title_description(story_script):
@@ -906,7 +913,8 @@ def create_title_description(story_script):
             raise APIError(f"OpenAI API Error: {response.status_code} - {response.text}")
             
     except Exception as e:
-        log_error(e, "OpenAI Title Description", getattr(response, 'text', ''))
+        response_text = getattr(response, 'text', '') if 'response' in locals() else ''
+        log_error(e, "OpenAI Title Description", response_text)
         raise e
 
 def generate_audio(text, language='th'):
