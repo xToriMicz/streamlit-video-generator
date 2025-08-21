@@ -627,9 +627,22 @@ class LicenseManager:
         except Exception as e:
             return False, f"ข้อผิดพลาด: {str(e)}"
     
-    def get_demo_license(self):
-        """สร้าง Demo License Key ทดลองใช้ 1 เดือน"""
-        return self.generate_license_key("demo_user", 1)
+    def get_demo_license(self, secret_code):
+        """สร้าง Demo License Key ทดลองใช้ 3 วัน (ต้องมีรหัสลับ)"""
+        # รหัสลับสำหรับ Demo License
+        if secret_code != "DEMO2025VG":
+            return None, "รหัสลับไม่ถูกต้อง"
+        
+        # สร้าง Demo License ใช้ได้ 3 วัน
+        try:
+            expiry = datetime.now() + timedelta(days=3)
+            raw_string = f"demo_user_{self.secret}_{expiry.strftime('%Y%m%d')}"
+            hash_part = hashlib.sha256(raw_string.encode()).hexdigest()[:8].upper()
+            expiry_code = expiry.strftime('%y%m')
+            demo_license = f"VG-{hash_part}-{expiry_code}"
+            return demo_license, f"Demo License สร้างแล้ว (หมดอายุ 3 วัน)"
+        except Exception:
+            return None, "ไม่สามารถสร้าง Demo License ได้"
 
 # Helper Functions ()
 def get_ffmpeg_path():
@@ -1505,37 +1518,54 @@ def show_license_page():
         label_visibility="collapsed"
     )
     
-    col1, col2 = st.columns([1, 1])
+    if st.button("✅ ตรวจสอบ License", use_container_width=True):
+        if license_input:
+            is_valid, message = st.session_state.license_manager.verify_license_key(license_input)
+            if is_valid:
+                st.session_state.license_verified = True
+                st.session_state.license_key = license_input
+                st.success(f"🎉 {message}")
+                time.sleep(1)
+                st.rerun()
+            else:
+                st.error(f"❌ {message}")
+        else:
+            st.warning("⚠️ กรุณาใส่ License Key")
+    
+    # Demo License Section with Secret Code
+    st.markdown("---")
+    st.markdown("### 🎯 Demo License (ทดลองใช้ 3 วัน)")
+    
+    col1, col2 = st.columns([2, 1])
     
     with col1:
-        if st.button("✅ ตรวจสอบ License", use_container_width=True):
-            if license_input:
-                is_valid, message = st.session_state.license_manager.verify_license_key(license_input)
-                if is_valid:
-                    st.session_state.license_verified = True
-                    st.session_state.license_key = license_input
-                    st.success(f"🎉 {message}")
-                    time.sleep(1)
-                    st.rerun()
+        secret_code = st.text_input(
+            "รหัสลับสำหรับ Demo License:",
+            placeholder="ใส่รหัสลับที่ได้รับจากเรา",
+            key="secret_code_input"
+        )
+    
+    with col2:
+        if st.button("🔓 สร้าง Demo License", use_container_width=True):
+            if secret_code:
+                demo_license, message = st.session_state.license_manager.get_demo_license(secret_code)
+                if demo_license:
+                    st.success(f"✅ {message}")
+                    st.code(demo_license, language=None)
+                    st.info("📋 คัดลอก License Key ด้านบนแล้วนำมาใส่ในช่องข้างบน")
                 else:
                     st.error(f"❌ {message}")
             else:
-                st.warning("⚠️ กรุณาใส่ License Key")
-    
-    with col2:
-        if st.button("📝 ขอ Demo License", use_container_width=True):
-            demo_license = st.session_state.license_manager.get_demo_license()
-            if demo_license:
-                st.info(f"🎯 **Demo License Key:**\n```\n{demo_license}\n```")
-                st.info("📋 คัดลอก License Key ด้านบนแล้วนำมาใส่ในช่องข้างบน")
+                st.warning("⚠️ กรุณาใส่รหัสลับ")
     
     # Instructions
     st.markdown("---")
     st.markdown("### 📋 คำแนะนำ:")
     st.markdown("""
-    - **Demo License**: สำหรับทดลองใช้ฟรี 1 เดือน
+    - **Demo License**: ทดลองใช้ 3 วัน (ต้องมีรหัสลับ)
     - **รูปแบบ License**: `VG-XXXXXXXX-YYMM`
-    - **ติดต่อขอ License**: สำหรับการใช้งานจริง
+    - **ติดต่อขอ License**: สำหรับการใช้งานระยะยาว
+    - **ขอรหัสลับ**: ติดต่อเราเพื่อขอรหัสลับ Demo
     """)
     
     # Footer
