@@ -547,14 +547,6 @@ if 'api_manager' not in st.session_state:
     st.session_state.api_manager = SecureAPIKeyManager()
 if 'template_manager' not in st.session_state:
     st.session_state.template_manager = TemplateManager()
-if 'license_manager' not in st.session_state:
-    st.session_state.license_manager = LicenseManager()
-
-# License verification ()
-if 'license_verified' not in st.session_state:
-    st.session_state.license_verified = False
-if 'license_key' not in st.session_state:
-    st.session_state.license_key = ""
 
 # Initialize API keys from Environment Variables every time ()
 # This ensures API keys from Render Environment Variables are always loaded
@@ -643,6 +635,16 @@ class LicenseManager:
             return demo_license, f"Demo License สร้างแล้ว (หมดอายุ 3 วัน)"
         except Exception:
             return None, "ไม่สามารถสร้าง Demo License ได้"
+
+# Initialize License Manager after class definition ()
+if 'license_manager' not in st.session_state:
+    st.session_state.license_manager = LicenseManager()
+
+# License verification ()
+if 'license_verified' not in st.session_state:
+    st.session_state.license_verified = False
+if 'license_key' not in st.session_state:
+    st.session_state.license_key = ""
 
 # Helper Functions ()
 def get_ffmpeg_path():
