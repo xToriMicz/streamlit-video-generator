@@ -1400,6 +1400,11 @@ def create_video_with_ffmpeg(image_files, audio_file, title):
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         final_video_path = output_dir / f"{safe_title}_{timestamp}.mp4"
         
+        # Debug: แสดงข้อมูล path
+        import streamlit as st
+        st.info(f"🔍 FFmpeg Debug: Output folder = {output_dir.absolute()}")
+        st.info(f"🔍 FFmpeg Debug: Final video = {final_video_path.absolute()}")
+        
         cmd2 = [
             ffmpeg_path, "-i", temp_video.name, "-i", audio_file,
             "-c:v", "libx264", "-c:a", "aac", 
@@ -1411,8 +1416,15 @@ def create_video_with_ffmpeg(image_files, audio_file, title):
         
         result2 = subprocess.run(cmd2, capture_output=True, text=True)
         
+        # Debug: แสดงผล FFmpeg
+        st.info(f"🔍 FFmpeg Command: {' '.join(cmd2)}")
+        st.info(f"🔍 FFmpeg Return Code: {result2.returncode}")
+        
         if result2.returncode != 0:
+            st.error(f"❌ FFmpeg Error: {result2.stderr}")
             raise APIError(f"ไม่สามารถรวมเสียงได้: {result2.stderr}")
+        else:
+            st.success(f"✅ FFmpeg Success: สร้างวิดีโอสำเร็จ")
         
         # ลบไฟล์ชั่วคราว
         try:
@@ -1773,7 +1785,10 @@ def main():
                     status_text.markdown('<div class="status-text">🎬 กำลังสร้างวิดีโอ...</div>', unsafe_allow_html=True)
                     
                     title = title_desc.get('title', topic)
+                    st.info(f"🔍 Debug: กำลังสร้างวิดีโอ '{title}' จากรูป {len(image_files)} ภาพ")
+                    
                     video_file = create_video_with_ffmpeg(image_files, audio_file, title)
+                    st.success(f"🔍 Debug: FFmpeg สร้างไฟล์ที่: {video_file}")
                     
                     progress_bar.progress(100)
                     status_text.markdown('<div class="status-text">✅ สร้างวิดีโอเสร็จสิ้น!</div>', unsafe_allow_html=True)
