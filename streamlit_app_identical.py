@@ -1817,8 +1817,28 @@ def main():
                             try:
                                 import psutil
                                 memory = psutil.virtual_memory()
-                                if memory.percent > 80:
-                                    st.warning(f"⚠️ Memory usage สูง ({memory.percent:.1f}%) - อาจมีปัญหาในการสร้างคลิป")
+                                st.info(f"💾 Memory: {memory.percent:.1f}% | Available: {memory.available/1024/1024:.0f}MB")
+                                if memory.percent > 70:
+                                    st.error(f"❌ Memory เกือบหมด ({memory.percent:.1f}%) - หยุดการทำงานเพื่อป้องกัน crash")
+                                    st.session_state['generation_in_progress'] = False
+                                    return
+                            except Exception as e:
+                                st.warning(f"⚠️ ไม่สามารถตรวจสอบ memory ได้: {str(e)}")
+                                
+                            # ลด resource usage บน cloud
+                            st.info("🔧 กำลังปรับ settings สำหรับ cloud environment...")
+                            # Force cleanup temp files ก่อนเริ่มสร้างรูป
+                            try:
+                                import tempfile
+                                import shutil
+                                temp_dir = tempfile.gettempdir()
+                                for f in os.listdir(temp_dir):
+                                    if f.startswith('tmp') and (f.endswith('.jpg') or f.endswith('.mp4') or f.endswith('.wav')):
+                                        try:
+                                            os.remove(os.path.join(temp_dir, f))
+                                        except:
+                                            pass
+                                st.info("🧹 ล้าง temp files เพื่อประหยัด memory")
                             except:
                                 pass
                             
@@ -1830,6 +1850,20 @@ def main():
                         st.info(f"🔍 Debug: สร้างรูปภาพสำเร็จ {len(image_files)} ภาพ")
                         progress_info.success("🎨 สร้างรูปภาพเสร็จสิ้น")
                         progress_bar.progress(80)
+                        
+                        # ตรวจสอบ memory หลังจากสร้างรูปเสร็จ (เพื่อป้องกัน crash ใน FFmpeg)
+                        if is_cloud:
+                            try:
+                                import psutil
+                                memory = psutil.virtual_memory()
+                                st.info(f"💾 Memory หลังสร้างรูป: {memory.percent:.1f}% | Available: {memory.available/1024/1024:.0f}MB")
+                                if memory.percent > 75:
+                                    st.error(f"❌ Memory เกือบหมด ({memory.percent:.1f}%) - หยุดก่อน FFmpeg เพื่อป้องกัน server crash")
+                                    st.warning("💡 แนะนำ: ลองใส่หัวข้อที่สั้นกว่านี้ หรือรอสักครู่แล้วลองใหม่")
+                                    st.session_state['generation_in_progress'] = False
+                                    return
+                            except Exception as e:
+                                st.info(f"⚠️ Memory check: {str(e)}")
                         
                     except Exception as img_error:
                         st.error(f"❌ Error สร้างรูปภาพ: {str(img_error)}")
