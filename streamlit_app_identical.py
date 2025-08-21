@@ -1807,9 +1807,40 @@ def main():
                             except:
                                 pass
                     
-                    image_files = generate_images_with_fal(image_prompts, update_image_progress)
-                    progress_info.success("🎨 สร้างรูปภาพเสร็จสิ้น")
-                    progress_bar.progress(80)
+                    try:
+                        # ตรวจสอบว่าอยู่บน cloud environment หรือไม่
+                        is_cloud = os.getenv('RENDER') or os.getenv('STREAMLIT_CLOUD') or 'localhost' not in st.get_option('server.address', 'localhost')
+                        
+                        if is_cloud:
+                            st.info("☁️ กำลังสร้างบน Cloud Server - อาจใช้เวลานานกว่าปกติ")
+                            # ตรวจสอบ memory usage บน cloud
+                            try:
+                                import psutil
+                                memory = psutil.virtual_memory()
+                                if memory.percent > 80:
+                                    st.warning(f"⚠️ Memory usage สูง ({memory.percent:.1f}%) - อาจมีปัญหาในการสร้างคลิป")
+                            except:
+                                pass
+                            
+                        image_files = generate_images_with_fal(image_prompts, update_image_progress)
+                        
+                        if not image_files or len(image_files) == 0:
+                            raise APIError("ไม่สามารถสร้างรูปภาพได้ - อาจเป็นปัญหา network หรือ API limit")
+                            
+                        st.info(f"🔍 Debug: สร้างรูปภาพสำเร็จ {len(image_files)} ภาพ")
+                        progress_info.success("🎨 สร้างรูปภาพเสร็จสิ้น")
+                        progress_bar.progress(80)
+                        
+                    except Exception as img_error:
+                        st.error(f"❌ Error สร้างรูปภาพ: {str(img_error)}")
+                        if "timeout" in str(img_error).lower():
+                            st.warning("⚠️ Timeout Error - ลองลดจำนวนรูปภาพหรือเปลี่ยน prompt ให้สั้นลง")
+                        elif "quota" in str(img_error).lower() or "limit" in str(img_error).lower():
+                            st.warning("⚠️ API Quota หมด - รอสักครู่แล้วลองใหม่")
+                        else:
+                            st.info("💡 ปัญหาอาจเกิดจาก: Network timeout, API quota limit, หรือ Memory limit บน cloud")
+                        st.session_state['generation_in_progress'] = False
+                        return
                     
                     # Step 6: สร้างวิดีโอ (80-100%)
                     status_text.markdown('<div class="status-text">🎬 กำลังสร้างวิดีโอ...</div>', unsafe_allow_html=True)

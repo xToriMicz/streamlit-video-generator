@@ -1,6 +1,10 @@
-streamlit
-requests
-psutil
-cryptography
-imageio[ffmpeg]
-imageio-ffmpeg
+streamlit>=1.25.0
+requests>=2.25.0
+psutil>=5.8.0
+cryptography>=3.0.0
+imageio[ffmpeg]>=2.25.0
+imageio-ffmpeg>=0.4.8
+pillow>=8.0.0
+numpy>=1.21.0
+hashlib-compat
+pathlib2
