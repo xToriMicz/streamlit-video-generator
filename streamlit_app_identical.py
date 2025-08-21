@@ -641,9 +641,40 @@ if 'license_manager' not in st.session_state:
     st.session_state.license_manager = LicenseManager()
 
 # License verification with persistent storage ()
+def get_query_param(key, default=""):
+    """Get query parameter with backward compatibility"""
+    try:
+        # For newer Streamlit versions
+        return st.query_params.get(key, default)
+    except AttributeError:
+        # For older Streamlit versions  
+        params = st.experimental_get_query_params()
+        return params.get(key, [default])[0]
+
+def set_query_param(key, value):
+    """Set query parameter with backward compatibility"""
+    try:
+        # For newer Streamlit versions
+        st.query_params[key] = value
+    except AttributeError:
+        # For older Streamlit versions
+        st.experimental_set_query_params(**{key: value})
+
+def clear_query_param(key):
+    """Clear query parameter with backward compatibility"""  
+    try:
+        # For newer Streamlit versions
+        if key in st.query_params:
+            del st.query_params[key]
+    except AttributeError:
+        # For older Streamlit versions
+        params = st.experimental_get_query_params()
+        if key in params:
+            del params[key]
+            st.experimental_set_query_params(**params)
+
 # Try to load license from query params (persistent across page refreshes)
-query_params = st.query_params
-stored_license = query_params.get("license_key", "")
+stored_license = get_query_param("license_key", "")
 
 if 'license_verified' not in st.session_state:
     st.session_state.license_verified = False
@@ -1558,7 +1589,7 @@ def show_license_page():
                 st.session_state.license_verified = True
                 st.session_state.license_key = license_input
                 # Store license in URL query params for persistence
-                st.query_params["license_key"] = license_input
+                set_query_param("license_key", license_input)
                 st.success(f"🎉 {message}")
                 time.sleep(1)
                 st.rerun()
@@ -1626,8 +1657,7 @@ def main():
             st.session_state.license_verified = False
             st.session_state.license_key = ""
             # Clear license from URL query params
-            if "license_key" in st.query_params:
-                del st.query_params["license_key"]
+            clear_query_param("license_key")
             st.rerun()
     
     # Settings Dialog (Hidden if Environment Variables exist)
